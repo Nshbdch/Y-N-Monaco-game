@@ -16,7 +16,7 @@ LOSE_AUDIO_FILE = ROOT / "lose-entry.mp3"
 BACKGROUND_AUDIO_FILE = ROOT / "musique-fond.mp3"
 LEVER_AUDIO_FILE = ROOT / "son-machine.mp3"
 METEOR_FILE = ROOT / "meteorite.avif"
-IFRAME_HEIGHT = 1650
+IFRAME_HEIGHT = 900
 
 
 def extract_body(html: str) -> str:
@@ -82,15 +82,40 @@ def main() -> None:
     st.markdown(
         """
         <style>
-          .block-container {padding-top: 0.25rem; padding-bottom: 0; max-width: 100%;}
-          header[data-testid='stHeader'], div[data-testid='stToolbar'] {visibility: hidden; height: 0;}
+          html, body, [data-testid="stAppViewContainer"], [data-testid="stMain"] {
+            margin: 0 !important;
+            padding: 0 !important;
+            background: transparent !important;
+          }
+          .block-container, [data-testid="stMainBlockContainer"] {
+            max-width: 100% !important;
+            padding: 0 !important;
+            margin: 0 !important;
+          }
+          div[data-testid="stVerticalBlock"] {
+            gap: 0 !important;
+          }
+          div[data-testid="stIFrame"] {
+            line-height: 0 !important;
+          }
+          iframe[title="st.iframe"] {
+            display: block !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            border: 0 !important;
+            margin: 0 !important;
+          }
+          header[data-testid='stHeader'], div[data-testid='stToolbar'] {
+            visibility: hidden;
+            height: 0;
+          }
         </style>
         """,
         unsafe_allow_html=True,
     )
 
     game_html = build_embedded_html()
-    components.html(game_html, height=IFRAME_HEIGHT, scrolling=True)
+    components.html(game_html, height=IFRAME_HEIGHT, scrolling=False)
 
 
 if __name__ == "__main__":
