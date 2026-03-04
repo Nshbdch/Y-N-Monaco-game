@@ -16,7 +16,7 @@ LOSE_AUDIO_FILE = ROOT / "lose-entry.mp3"
 BACKGROUND_AUDIO_FILE = ROOT / "musique-fond.mp3"
 LEVER_AUDIO_FILE = ROOT / "son-machine.mp3"
 METEOR_FILE = ROOT / "meteorite.avif"
-IFRAME_HEIGHT = 900
+IFRAME_HEIGHT = 1200
 
 
 def extract_body(html: str) -> str:
@@ -82,32 +82,59 @@ def main() -> None:
     st.markdown(
         """
         <style>
-          html, body, [data-testid="stAppViewContainer"], [data-testid="stMain"] {
+          html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"] {
             margin: 0 !important;
             padding: 0 !important;
             background: transparent !important;
+            width: 100% !important;
+            height: 100dvh !important;
+            max-height: 100dvh !important;
+            overflow: hidden !important;
+          }
+          section.main {
+            padding: 0 !important;
+            margin: 0 !important;
+            height: 100dvh !important;
+            overflow: hidden !important;
           }
           .block-container, [data-testid="stMainBlockContainer"] {
             max-width: 100% !important;
             padding: 0 !important;
             margin: 0 !important;
+            width: 100% !important;
+            height: 100dvh !important;
+            overflow: hidden !important;
           }
           div[data-testid="stVerticalBlock"] {
             gap: 0 !important;
+            height: 100dvh !important;
+            overflow: hidden !important;
           }
           div[data-testid="stIFrame"] {
             line-height: 0 !important;
+            width: 100vw !important;
+            height: 100dvh !important;
+            min-height: 100dvh !important;
+            max-height: 100dvh !important;
+            overflow: hidden !important;
           }
           iframe[title="st.iframe"] {
             display: block !important;
             width: 100vw !important;
-            height: 100vh !important;
+            height: 100dvh !important;
+            min-height: 100dvh !important;
+            max-height: 100dvh !important;
             border: 0 !important;
             margin: 0 !important;
+            padding: 0 !important;
           }
-          header[data-testid='stHeader'], div[data-testid='stToolbar'] {
-            visibility: hidden;
-            height: 0;
+          header[data-testid='stHeader'], div[data-testid='stToolbar'], div[data-testid='stDecoration'] {
+            display: none !important;
+            visibility: hidden !important;
+            height: 0 !important;
+            min-height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
           }
         </style>
         """,

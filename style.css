@@ -179,12 +179,12 @@ body.game-only .game-head {
   z-index: 1;
   max-width: 1100px;
   margin: 0 auto;
-  padding: 24px 16px 40px;
+  padding: clamp(12px, 2.2vw, 24px) clamp(8px, 1.6vw, 16px) clamp(16px, 3.8vh, 40px);
 }
 
 .brand-bar {
   text-align: center;
-  margin-bottom: 20px;
+  margin-bottom: clamp(10px, 2.2vh, 20px);
 }
 
 .brand-bar h1 {
@@ -223,15 +223,22 @@ h2 {
   font-family: "Press Start 2P", monospace;
   line-height: 1.5;
   font-size: clamp(0.8rem, 2vw, 1rem);
-  margin: 0 0 20px;
+  margin: 0 0 clamp(12px, 2vh, 20px);
 }
 
 .access-panel {
   text-align: center;
-  min-height: clamp(320px, 50vh, 560px);
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
+  min-height: clamp(260px, 44vh, 520px);
+  display: grid;
+  align-content: center;
+  gap: clamp(12px, 2.3vh, 22px);
+  padding-top: clamp(10px, 3vh, 26px);
+  padding-bottom: clamp(12px, 3.9vh, 34px);
+}
+
+#accessScreen > h2 {
+  margin: 0 0 clamp(12px, 2.2vh, 20px);
+  line-height: 1.35;
 }
 
 .access-actions {
@@ -279,19 +286,26 @@ h2 {
 
 .participant-login {
   width: min(92%, 760px);
-  margin: 20px auto 0;
+  margin: 0 auto;
   display: grid;
-  gap: 14px;
+  gap: clamp(12px, 2.3vh, 22px);
   text-align: left;
+}
+
+.participant-login label {
+  margin: 0;
+  display: block;
+  line-height: 1.25;
+  font-size: clamp(1.05rem, 2.3vw, 1.15rem);
 }
 
 .participant-login input {
   font-size: clamp(1rem, 2.8vw, 1.2rem);
-  padding: 14px 16px;
+  padding: clamp(12px, 1.9vh, 16px) clamp(14px, 2vw, 18px);
 }
 
 .participant-login .neon-btn {
-  padding: 14px 22px;
+  padding: clamp(12px, 1.9vh, 16px) clamp(18px, 2.6vw, 24px);
   font-size: clamp(0.95rem, 2.4vw, 1.08rem);
 }
 
@@ -316,6 +330,11 @@ input:focus {
   color: var(--danger);
   margin: 0;
   font-size: 0.82rem;
+}
+
+.participant-login .error-msg:empty {
+  min-height: 0;
+  display: none;
 }
 
 .panel-head {
@@ -370,6 +389,14 @@ td button {
   cursor: pointer;
 }
 
+td button + button {
+  margin-left: 6px;
+}
+
+td button[data-edit] {
+  background: #2c66df;
+}
+
 .admin-stats {
   margin: 8px 0 12px;
   color: #ffd7ff;
@@ -378,6 +405,21 @@ td button {
 
 .terminal-panel {
   max-width: 760px;
+}
+
+#terminalScreen.panel,
+#terminalScreen.panel.active {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  backdrop-filter: none;
+  padding: 0;
+}
+
+#terminalScreen.panel.active {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
 .terminal-panel.terminal-transition-in {
@@ -418,6 +460,35 @@ td button {
   padding: 16px;
   background: radial-gradient(circle at 20% 12%, #09222a 0%, #050b16 54%, #05080f 100%);
   box-shadow: inset 0 0 42px #0b2f3f80, 0 0 22px #18eeff40;
+}
+
+.terminal-prize-showcase {
+  margin-top: 0;
+  border: 1px solid #ffd55780;
+  border-radius: 14px;
+  padding: clamp(12px, 2.2vw, 18px);
+  background: linear-gradient(120deg, #2e134ecf, #4a1d69cc 52%, #5b1b63cc);
+  box-shadow: inset 0 0 26px #ffe08d30, 0 0 22px #f2b2ff33;
+  text-align: center;
+  font-family: "Press Start 2P", monospace;
+}
+
+.terminal-prize-label {
+  display: block;
+  margin-bottom: 10px;
+  font-size: clamp(0.56rem, 1.8vw, 0.7rem);
+  color: #f1ceff;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.terminal-prize-value {
+  display: block;
+  font-size: clamp(0.92rem, 3.2vw, 1.55rem);
+  line-height: 1.25;
+  color: #fff8c2;
+  text-shadow: 0 0 12px #ffd557b3, 0 0 20px #ff7be57a;
+  word-break: break-word;
 }
 
 .terminal-title {
@@ -1073,7 +1144,9 @@ td button {
 }
 
 .result-overlay.win .result-text {
-  min-width: min(88vw, 760px);
+  width: min(88vw, 760px);
+  max-width: calc(100vw - 24px);
+  min-width: 0;
   padding: 18px 18px 20px;
 }
 
@@ -1263,13 +1336,12 @@ body.win-explosion {
   }
 
   .access-panel {
-    min-height: 68vh;
+    min-height: clamp(260px, 50vh, 520px);
   }
 
   .participant-login {
     width: 100%;
-    margin-top: 14px;
-    gap: 10px;
+    margin-top: 0;
   }
 
   #gameScreen.active {
@@ -1386,67 +1458,6 @@ body.win-explosion {
   .cabinet-controls {
     margin-top: 14px;
     padding: 12px 12px;
-  }
-}
-
-@media (min-width: 701px) and (max-width: 1180px) {
-  .app-shell {
-    height: 100dvh;
-    min-height: 100dvh;
-    max-height: 100dvh;
-    padding: 14px 12px 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    overflow: hidden;
-  }
-
-  .brand-bar {
-    margin-bottom: 4px;
-  }
-
-  .brand-bar h1 {
-    font-size: clamp(1.5rem, 4.6vw, 2.3rem);
-  }
-
-  .brand-bar p {
-    margin-top: 6px;
-    font-size: 0.82rem;
-  }
-
-  h2 {
-    margin-bottom: 14px;
-  }
-
-  .panel {
-    padding: 16px;
-  }
-
-  .access-panel {
-    min-height: auto;
-    flex: 0 0 auto;
-    justify-content: center;
-    padding-top: 12px;
-    padding-bottom: 12px;
-  }
-
-  .participant-login {
-    width: min(100%, 700px);
-    margin-top: 8px;
-    gap: 10px;
-  }
-
-  .participant-login input {
-    padding: 12px 14px;
-  }
-
-  .participant-login .neon-btn {
-    padding: 12px 18px;
-  }
-
-  .admin-fab {
-    right: 12px;
-    bottom: 12px;
   }
 }
 

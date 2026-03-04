@@ -30,7 +30,6 @@
       <section id="accessScreen" class="panel access-panel active">
         <h2>Entrez votre email pour jouer</h2>
         <form id="participantLoginForm" class="participant-login" autocomplete="off">
-          <label for="participantEmail">Email participant</label>
           <input id="participantEmail" type="email" placeholder="prenom@entreprise.com" required />
           <button type="submit" class="neon-btn">Accéder au jeu</button>
           <p id="participantLoginError" class="error-msg"></p>
@@ -64,6 +63,7 @@
             <input id="prizeQuantity" type="number" min="0" step="1" placeholder="Ex: 100" required />
           </div>
           <button type="submit" class="neon-btn">Ajouter / Mettre à jour</button>
+          <button id="cancelPrizeEditBtn" type="button" class="mini-btn hidden">Annuler la modification</button>
         </form>
 
         <div class="admin-stats" id="adminStats"></div>
@@ -151,6 +151,7 @@
       </section>
 
       <section id="terminalScreen" class="panel hidden terminal-panel">
+        <div id="terminalPrizeShowcase" class="terminal-prize-showcase hidden" aria-live="polite"></div>
         <div class="terminal-shell">
           <p class="terminal-title">MISSION TERMINAL</p>
           <div id="terminalBody" class="terminal-body"></div>

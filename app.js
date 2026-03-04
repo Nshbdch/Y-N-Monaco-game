@@ -6,6 +6,7 @@ const PRIZE_PRESET_VERSION_KEY = "yn-cosmic-jackpot-prize-preset-version";
 const PRIZE_PRESET_VERSION = "event-monaco-v1";
 const MAX_PLAYER_CREDITS = 3;
 const WIN_OVERLAY_DURATION_MS = 10000;
+const WIN_REVEAL_PAUSE_MS = 450;
 const TERMINAL_TRANSITION_DURATION_MS = 1800;
 const MIN_TERMINAL_WIDTH_PX = 320;
 const MIN_TERMINAL_HEIGHT_PX = 280;
@@ -54,6 +55,7 @@ const dom = {
   prizeName: document.getElementById("prizeName"),
   prizeRate: document.getElementById("prizeRate"),
   prizeQuantity: document.getElementById("prizeQuantity"),
+  cancelPrizeEditBtn: document.getElementById("cancelPrizeEditBtn"),
   prizeTableBody: document.getElementById("prizeTableBody"),
   winnerTableBody: document.getElementById("winnerTableBody"),
   exportWinnersBtn: document.getElementById("exportWinnersBtn"),
@@ -69,6 +71,7 @@ const dom = {
   confettiLayer: document.getElementById("confettiLayer"),
   alarmFlash: document.getElementById("alarmFlash"),
   terminalBody: document.getElementById("terminalBody"),
+  terminalPrizeShowcase: document.getElementById("terminalPrizeShowcase"),
   terminalBackToHome: document.getElementById("terminalBackToHome"),
   quickAdminBtn: document.getElementById("quickAdminBtn"),
   backToHomeFromAdmin: document.getElementById("backToHomeFromAdmin"),
@@ -92,6 +95,7 @@ let loseAudioResumeTimer;
 let actionSfxPrimed = false;
 let meteorTimer;
 let lastGameScreenRect = null;
+let editingPrizeName = null;
 const meteorPresets = [
   { sizeMin: 150, sizeMax: 240, speedMin: 17500, speedMax: 24500, maxCount: 1, count: 0, zIndex: 1 },
   { sizeMin: 95, sizeMax: 150, speedMin: 20500, speedMax: 28750, maxCount: 2, count: 0, zIndex: 0 },
@@ -184,6 +188,49 @@ function registerWinner(email, prizeName) {
 function clearWinners() {
   winnerLog = [];
   saveWinners();
+}
+
+function resetPrizeFormEditState() {
+  editingPrizeName = null;
+  if (dom.cancelPrizeEditBtn) {
+    dom.cancelPrizeEditBtn.classList.add("hidden");
+  }
+}
+
+function startPrizeEdit(prizeName) {
+  const prize = prizePool.find((p) => p.name === prizeName);
+  if (!prize) return;
+
+  editingPrizeName = prize.name;
+  dom.prizeName.value = prize.name;
+  dom.prizeRate.value = String(prize.rate);
+  dom.prizeQuantity.value = String(prize.quantity);
+  if (dom.cancelPrizeEditBtn) {
+    dom.cancelPrizeEditBtn.classList.remove("hidden");
+  }
+  dom.prizeName.focus();
+}
+
+function clearWinnersAndRestoreStock() {
+  if (winnerLog.length === 0) {
+    clearWinners();
+    return;
+  }
+
+  const wonByPrize = winnerLog.reduce((acc, row) => {
+    acc.set(row.prize, (acc.get(row.prize) || 0) + 1);
+    return acc;
+  }, new Map());
+
+  prizePool.forEach((prize) => {
+    const wonCount = wonByPrize.get(prize.name) || 0;
+    if (wonCount > 0) {
+      prize.quantity += wonCount;
+    }
+  });
+
+  savePrizes();
+  clearWinners();
 }
 
 function normalizeEmail(email) {
@@ -299,11 +346,16 @@ function renderPrizes() {
     stockCell.textContent = `${prize.quantity} restants (${getWonCountForPrize(prize.name)} gagnés)`;
 
     const actionCell = document.createElement("td");
+    const editButton = document.createElement("button");
+    editButton.type = "button";
+    editButton.dataset.edit = prize.name;
+    editButton.textContent = "Modifier";
+
     const deleteButton = document.createElement("button");
     deleteButton.type = "button";
     deleteButton.dataset.delete = prize.name;
     deleteButton.textContent = "Supprimer";
-    actionCell.appendChild(deleteButton);
+    actionCell.append(editButton, deleteButton);
 
     row.append(lotCell, rateCell, stockCell, actionCell);
     dom.prizeTableBody.appendChild(row);
@@ -503,7 +555,7 @@ function createReelArtwork(label) {
 }
 
 function showResultOverlay(message, type) {
-  positionResultOverlay();
+  positionResultOverlay(type === "win" ? "viewport" : "target");
   if (type === "win") {
     const prizeName = normalizePrizeName(String(message || ""));
     const prizeEmoji = getIconForLabel(prizeName);
@@ -522,8 +574,16 @@ function hideResultOverlay() {
   dom.confettiLayer.innerHTML = "";
 }
 
-function positionResultOverlay() {
+function positionResultOverlay(mode = "target") {
   if (!dom.resultOverlay) {
+    return;
+  }
+
+  if (mode === "viewport") {
+    dom.resultOverlay.style.setProperty("--overlay-center-x", `${window.innerWidth / 2}px`);
+    dom.resultOverlay.style.setProperty("--overlay-center-y", `${window.innerHeight / 2}px`);
+    dom.resultOverlay.style.setProperty("--overlay-width", `${Math.max(260, window.innerWidth * 0.86)}px`);
+    dom.resultOverlay.style.setProperty("--overlay-height", `${Math.max(180, window.innerHeight * 0.4)}px`);
     return;
   }
 
@@ -937,6 +997,10 @@ function resetParticipantSession() {
   dom.participantLoginError.textContent = "";
   dom.participantEmail.value = "";
   renderLivesHearts(MAX_PLAYER_CREDITS);
+  if (dom.terminalPrizeShowcase) {
+    dom.terminalPrizeShowcase.classList.add("hidden");
+    dom.terminalPrizeShowcase.innerHTML = "";
+  }
 }
 
 function isAdminAccessUrl() {
@@ -984,6 +1048,13 @@ function prepareWinTerminal(prizeName) {
     "> VOUS RECEVREZ BIENTOT LES DETAILS DE VOTRE GAIN",
   ];
   dom.terminalBody.textContent = lines.join("\n");
+  if (dom.terminalPrizeShowcase) {
+    dom.terminalPrizeShowcase.innerHTML = `
+      <span class="terminal-prize-label">Lot obtenu</span>
+      <span class="terminal-prize-value">${icon} ${prizeName}</span>
+    `;
+    dom.terminalPrizeShowcase.classList.remove("hidden");
+  }
 }
 
 function syncTerminalToGamePosition() {
@@ -1183,6 +1254,8 @@ async function spinMachine() {
     reels.forEach((reel) => reel.classList.add("win-hit"));
     dom.statusBanner.textContent = `GAGNÉ - ${outcome[0]}`;
     dom.statusBanner.className = "status-banner win";
+    // Keep the 3 matching symbols visible for a short moment before launching win FX.
+    await sleep(WIN_REVEAL_PAUSE_MS);
     dom.slotMachine.classList.add("win-burst");
     triggerWinCelebration(outcome[0]);
   } else {
@@ -1267,8 +1340,9 @@ function setupEvents() {
       return;
     }
 
-    const existing = prizePool.find((p) => p.name === name);
+    const existing = prizePool.find((p) => p.name === (editingPrizeName || name));
     if (existing) {
+      existing.name = name;
       existing.rate = rate;
       existing.quantity = quantity;
     } else {
@@ -1279,6 +1353,7 @@ function setupEvents() {
     renderPrizes();
     renderWinners();
     dom.prizeForm.reset();
+    resetPrizeFormEditState();
     dom.prizeName.focus();
   });
 
@@ -1288,16 +1363,34 @@ function setupEvents() {
       return;
     }
 
-    const name = target.dataset.delete;
-    if (!name) {
+    const editName = target.dataset.edit;
+    if (editName) {
+      startPrizeEdit(editName);
       return;
     }
 
-    prizePool = prizePool.filter((p) => p.name !== name);
+    const deleteName = target.dataset.delete;
+    if (!deleteName) {
+      return;
+    }
+
+    prizePool = prizePool.filter((p) => p.name !== deleteName);
+    if (editingPrizeName === deleteName) {
+      dom.prizeForm.reset();
+      resetPrizeFormEditState();
+    }
     savePrizes();
     renderPrizes();
     renderWinners();
   });
+
+  if (dom.cancelPrizeEditBtn) {
+    dom.cancelPrizeEditBtn.addEventListener("click", () => {
+      dom.prizeForm.reset();
+      resetPrizeFormEditState();
+      dom.prizeName.focus();
+    });
+  }
 
   dom.lever.addEventListener("click", () => {
     playLeverAudio();
@@ -1316,7 +1409,7 @@ function setupEvents() {
         "Confirmer la suppression de toute la base des gagnants ? Cette action est irreversible.",
       );
       if (!ok) return;
-      clearWinners();
+      clearWinnersAndRestoreStock();
       renderPrizes();
       renderWinners();
     });
@@ -1359,7 +1452,10 @@ function init() {
   setupEvents();
   applyAccessModeFromUrl();
   positionResultOverlay();
-  window.addEventListener("resize", positionResultOverlay);
+  window.addEventListener("resize", () => {
+    const mode = dom.resultOverlay.classList.contains("win") ? "viewport" : "target";
+    positionResultOverlay(mode);
+  });
   window.addEventListener("resize", () => {
     if (dom.terminalScreen.classList.contains("terminal-transition-in")) {
       syncTerminalToGamePosition();
