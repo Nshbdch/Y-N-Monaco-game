@@ -14,6 +14,13 @@ const WIN_AUDIO_FILE = "win-entry.mp3";
 const LOSE_AUDIO_FILE = "lose-entry.mp3";
 const BACKGROUND_AUDIO_FILE = "musique-fond.mp3";
 const LEVER_AUDIO_FILE = "son-machine.mp3";
+const SUPABASE_URL = "__SUPABASE_URL__";
+const SUPABASE_ANON_KEY = "__SUPABASE_ANON_KEY__";
+const USE_SUPABASE =
+  Boolean(SUPABASE_URL) &&
+  Boolean(SUPABASE_ANON_KEY) &&
+  !SUPABASE_URL.includes("__SUPABASE_URL__") &&
+  !SUPABASE_ANON_KEY.includes("__SUPABASE_ANON_KEY__");
 const FALLBACK_SYMBOLS = [
   { name: "ALIEN", icon: "👽" },
   { name: "ASTRO", icon: "👨‍🚀" },
@@ -107,6 +114,148 @@ function normalizePrizeName(name) {
   return name.trim().replace(/\s+/g, " ").toUpperCase();
 }
 
+function supabaseHeaders(extra = {}) {
+  return {
+    apikey: SUPABASE_ANON_KEY,
+    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+    ...extra,
+  };
+}
+
+async function supabaseFetch(path, options = {}) {
+  const response = await fetch(`${SUPABASE_URL}${path}`, {
+    ...options,
+    headers: {
+      ...supabaseHeaders(),
+      ...(options.headers || {}),
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`Supabase ${response.status} on ${path}`);
+  }
+  if (response.status === 204) {
+    return null;
+  }
+  return response.json();
+}
+
+async function loadPrizesFromSupabase() {
+  const rows = await supabaseFetch("/rest/v1/prizes?select=name,rate,quantity");
+  return (Array.isArray(rows) ? rows : [])
+    .map((item) => ({
+      name: normalizePrizeName(String(item.name || "")),
+      rate: Number(item.rate),
+      quantity:
+        Number.isFinite(Number(item.quantity)) && Number(item.quantity) >= 0
+          ? Math.floor(Number(item.quantity))
+          : 0,
+    }))
+    .filter(
+      (item) =>
+        item.name &&
+        Number.isFinite(item.rate) &&
+        item.rate >= 0 &&
+        item.rate <= 100 &&
+        Number.isFinite(item.quantity) &&
+        item.quantity >= 0,
+    );
+}
+
+async function loadWinnersFromSupabase() {
+  const rows = await supabaseFetch("/rest/v1/winners?select=email,prize,at");
+  return (Array.isArray(rows) ? rows : [])
+    .map((item) => ({
+      email: normalizeEmail(String(item.email || "")),
+      prize: normalizePrizeName(String(item.prize || "")),
+      at: String(item.at || ""),
+    }))
+    .filter((item) => item.email && item.prize && item.at);
+}
+
+async function loadParticipantsFromSupabase() {
+  const rows = await supabaseFetch("/rest/v1/participants?select=email,plays_used,played_at,result,prize");
+  const result = {};
+  (Array.isArray(rows) ? rows : []).forEach((item) => {
+    const email = normalizeEmail(String(item.email || ""));
+    if (!email) return;
+    result[email] = {
+      email,
+      playsUsed: Number.isFinite(Number(item.plays_used)) ? Math.max(0, Math.floor(Number(item.plays_used))) : 0,
+      playedAt: item.played_at || null,
+      result: item.result || null,
+      prize: item.prize ? normalizePrizeName(String(item.prize)) : null,
+    };
+  });
+  return result;
+}
+
+async function upsertPrizeToSupabase(prize) {
+  if (!USE_SUPABASE) return;
+  await supabaseFetch("/rest/v1/prizes", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Prefer: "resolution=merge-duplicates",
+    },
+    body: JSON.stringify([
+      {
+        name: normalizePrizeName(prize.name),
+        rate: Number(prize.rate),
+        quantity: Math.max(0, Math.floor(Number(prize.quantity))),
+      },
+    ]),
+  });
+}
+
+async function deletePrizeFromSupabase(name) {
+  if (!USE_SUPABASE) return;
+  await supabaseFetch(`/rest/v1/prizes?name=eq.${encodeURIComponent(name)}`, {
+    method: "DELETE",
+  });
+}
+
+async function upsertParticipantToSupabase(participant) {
+  if (!USE_SUPABASE) return;
+  await supabaseFetch("/rest/v1/participants", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Prefer: "resolution=merge-duplicates",
+    },
+    body: JSON.stringify([
+      {
+        email: normalizeEmail(participant.email),
+        plays_used: Math.max(0, Math.floor(Number(participant.playsUsed || 0))),
+        played_at: participant.playedAt || null,
+        result: participant.result || null,
+        prize: participant.prize || null,
+      },
+    ]),
+  });
+}
+
+async function insertWinnerToSupabase(entry) {
+  if (!USE_SUPABASE) return;
+  await supabaseFetch("/rest/v1/winners", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify([
+      {
+        email: normalizeEmail(entry.email),
+        prize: normalizePrizeName(entry.prize),
+        at: entry.at,
+      },
+    ]),
+  });
+}
+
+async function clearWinnersFromSupabase() {
+  if (!USE_SUPABASE) return;
+  await supabaseFetch("/rest/v1/winners?id=gt.0", {
+    method: "DELETE",
+  });
+}
+
 function loadPrizes() {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) {
@@ -176,18 +325,25 @@ function saveWinners() {
   localStorage.setItem(WINNERS_STORAGE_KEY, JSON.stringify(winnerLog));
 }
 
-function registerWinner(email, prizeName) {
-  winnerLog.push({
+async function registerWinner(email, prizeName) {
+  const entry = {
     email: normalizeEmail(email),
     prize: normalizePrizeName(prizeName),
     at: new Date().toISOString(),
-  });
+  };
+  winnerLog.push(entry);
   saveWinners();
+  if (USE_SUPABASE) {
+    await insertWinnerToSupabase(entry);
+  }
 }
 
-function clearWinners() {
+async function clearWinners() {
   winnerLog = [];
   saveWinners();
+  if (USE_SUPABASE) {
+    await clearWinnersFromSupabase();
+  }
 }
 
 function resetPrizeFormEditState() {
@@ -211,9 +367,9 @@ function startPrizeEdit(prizeName) {
   dom.prizeName.focus();
 }
 
-function clearWinnersAndRestoreStock() {
+async function clearWinnersAndRestoreStock() {
   if (winnerLog.length === 0) {
-    clearWinners();
+    await clearWinners();
     return;
   }
 
@@ -230,7 +386,10 @@ function clearWinnersAndRestoreStock() {
   });
 
   savePrizes();
-  clearWinners();
+  if (USE_SUPABASE) {
+    await Promise.all(prizePool.map((prize) => upsertPrizeToSupabase(prize)));
+  }
+  await clearWinners();
 }
 
 function normalizeEmail(email) {
@@ -289,7 +448,7 @@ function hasAlreadyWon(email) {
   return result === "win";
 }
 
-function consumeParticipantCredit(email, isWin, prizeName) {
+async function consumeParticipantCredit(email, isWin, prizeName) {
   const state = getParticipantState(email);
   const nextPlaysUsed = Math.min(MAX_PLAYER_CREDITS, state.playsUsed + 1);
   participantRegistry[email] = {
@@ -300,6 +459,9 @@ function consumeParticipantCredit(email, isWin, prizeName) {
     prize: isWin ? prizeName : null,
   };
   saveParticipants();
+  if (USE_SUPABASE) {
+    await upsertParticipantToSupabase(participantRegistry[email]);
+  }
   return Math.max(0, MAX_PLAYER_CREDITS - nextPlaysUsed);
 }
 
@@ -307,7 +469,33 @@ function savePrizes() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(prizePool));
 }
 
-function seedAdminPrizesIfNeeded() {
+async function seedAdminPrizesIfNeeded() {
+  if (USE_SUPABASE) {
+    try {
+      const remotePrizes = await loadPrizesFromSupabase();
+      if (remotePrizes.length > 0) {
+        prizePool = remotePrizes;
+        savePrizes();
+      } else {
+        prizePool = EVENT_PRIZE_PRESET.map((item) => ({
+          name: normalizePrizeName(item.name),
+          rate: Number(item.rate),
+          quantity: Math.max(0, Math.floor(Number(item.quantity))),
+        }));
+        savePrizes();
+        await Promise.all(prizePool.map((prize) => upsertPrizeToSupabase(prize)));
+      }
+
+      participantRegistry = await loadParticipantsFromSupabase();
+      saveParticipants();
+      winnerLog = await loadWinnersFromSupabase();
+      saveWinners();
+      return;
+    } catch (error) {
+      console.error("Supabase sync failed, fallback localStorage:", error);
+    }
+  }
+
   const appliedVersion = localStorage.getItem(PRIZE_PRESET_VERSION_KEY);
   if (appliedVersion === PRIZE_PRESET_VERSION) {
     return;
@@ -436,13 +624,16 @@ function getEffectivePrizePool() {
   }));
 }
 
-function consumePrizeStock(prizeName) {
+async function consumePrizeStock(prizeName) {
   const prize = prizePool.find((p) => p.name === prizeName);
   if (!prize || prize.quantity <= 0) {
     return false;
   }
   prize.quantity -= 1;
   savePrizes();
+  if (USE_SUPABASE) {
+    await upsertPrizeToSupabase(prize);
+  }
   return true;
 }
 
@@ -1245,13 +1436,13 @@ async function spinMachine() {
   let resolvedWin = isWin;
   let stockAvailable = true;
   if (resolvedWin) {
-    stockAvailable = consumePrizeStock(outcome[0]);
+    stockAvailable = await consumePrizeStock(outcome[0]);
     if (!stockAvailable) {
       resolvedWin = false;
     }
   }
 
-  const remainingCredits = consumeParticipantCredit(
+  const remainingCredits = await consumeParticipantCredit(
     currentParticipantEmail,
     resolvedWin,
     resolvedWin ? outcome[0] : null,
@@ -1259,7 +1450,7 @@ async function spinMachine() {
   renderLivesHearts(remainingCredits);
 
   if (resolvedWin) {
-    registerWinner(currentParticipantEmail, outcome[0]);
+    await registerWinner(currentParticipantEmail, outcome[0]);
     renderPrizes();
     renderWinners();
     reels.forEach((reel) => reel.classList.add("win-hit"));
@@ -1298,13 +1489,36 @@ function setupEvents() {
   document.addEventListener("pointerdown", startBackgroundAudioOnce, { once: true });
   document.addEventListener("keydown", startBackgroundAudioOnce, { once: true });
 
-  dom.participantLoginForm.addEventListener("submit", (event) => {
+  dom.participantLoginForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     const email = normalizeEmail(dom.participantEmail.value);
 
     if (!isValidEmail(email)) {
       dom.participantLoginError.textContent = "Email invalide";
       return;
+    }
+
+    if (USE_SUPABASE) {
+      try {
+        const rows = await supabaseFetch(
+          `/rest/v1/participants?select=email,plays_used,played_at,result,prize&email=eq.${encodeURIComponent(email)}`,
+        );
+        if (Array.isArray(rows) && rows.length > 0) {
+          const row = rows[0];
+          participantRegistry[email] = {
+            email,
+            playsUsed: Number.isFinite(Number(row.plays_used))
+              ? Math.max(0, Math.floor(Number(row.plays_used)))
+              : 0,
+            playedAt: row.played_at || null,
+            result: row.result || null,
+            prize: row.prize ? normalizePrizeName(String(row.prize)) : null,
+          };
+          saveParticipants();
+        }
+      } catch (error) {
+        console.error("Failed to refresh participant from Supabase:", error);
+      }
     }
 
     const remainingCredits = getRemainingCredits(email);
@@ -1328,11 +1542,25 @@ function setupEvents() {
     dom.statusBanner.textContent = "Tire le levier pour lancer la machine";
   });
 
-  dom.adminLoginForm.addEventListener("submit", (event) => {
+  dom.adminLoginForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (dom.adminPassword.value === ADMIN_PASSWORD) {
       dom.adminLoginError.textContent = "";
       dom.adminPassword.value = "";
+      if (USE_SUPABASE) {
+        try {
+          prizePool = await loadPrizesFromSupabase();
+          participantRegistry = await loadParticipantsFromSupabase();
+          winnerLog = await loadWinnersFromSupabase();
+          savePrizes();
+          saveParticipants();
+          saveWinners();
+          renderPrizes();
+          renderWinners();
+        } catch (error) {
+          console.error("Failed to refresh admin data from Supabase:", error);
+        }
+      }
       setScreen(dom.adminScreen);
       return;
     }
@@ -1345,7 +1573,7 @@ function setupEvents() {
     });
   }
 
-  dom.prizeForm.addEventListener("submit", (event) => {
+  dom.prizeForm.addEventListener("submit", async (event) => {
     event.preventDefault();
 
     const name = normalizePrizeName(dom.prizeName.value);
@@ -1366,6 +1594,12 @@ function setupEvents() {
     }
 
     savePrizes();
+    if (USE_SUPABASE) {
+      await upsertPrizeToSupabase({ name, rate, quantity });
+      if (editingPrizeName && editingPrizeName !== name) {
+        await deletePrizeFromSupabase(editingPrizeName);
+      }
+    }
     renderPrizes();
     renderWinners();
     dom.prizeForm.reset();
@@ -1373,7 +1607,7 @@ function setupEvents() {
     dom.prizeName.focus();
   });
 
-  dom.prizeTableBody.addEventListener("click", (event) => {
+  dom.prizeTableBody.addEventListener("click", async (event) => {
     const target = event.target;
     if (!(target instanceof HTMLElement)) {
       return;
@@ -1396,6 +1630,9 @@ function setupEvents() {
       resetPrizeFormEditState();
     }
     savePrizes();
+    if (USE_SUPABASE) {
+      await deletePrizeFromSupabase(deleteName);
+    }
     renderPrizes();
     renderWinners();
   });
@@ -1420,12 +1657,12 @@ function setupEvents() {
   }
 
   if (dom.clearWinnersBtn) {
-    dom.clearWinnersBtn.addEventListener("click", () => {
+    dom.clearWinnersBtn.addEventListener("click", async () => {
       const ok = window.confirm(
         "Confirmer la suppression de toute la base des gagnants ? Cette action est irreversible.",
       );
       if (!ok) return;
-      clearWinnersAndRestoreStock();
+      await clearWinnersAndRestoreStock();
       renderPrizes();
       renderWinners();
     });
@@ -1458,8 +1695,8 @@ function setupEvents() {
   }
 }
 
-function init() {
-  seedAdminPrizesIfNeeded();
+async function init() {
+  await seedAdminPrizesIfNeeded();
   createReels();
   renderPrizes();
   renderWinners();
@@ -1480,4 +1717,6 @@ function init() {
   startMeteorShower();
 }
 
-init();
+init().catch((error) => {
+  console.error("App init failed:", error);
+});

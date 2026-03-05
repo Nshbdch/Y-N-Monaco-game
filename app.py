@@ -42,11 +42,15 @@ def build_embedded_html() -> str:
     meteor_b64 = base64.b64encode(METEOR_FILE.read_bytes()).decode("ascii")
     meteor_data_uri = f"data:image/avif;base64,{meteor_b64}"
     style_css = style_css.replace('url("meteorite.avif")', f'url("{meteor_data_uri}")')
+    supabase_url = str(st.secrets.get("SUPABASE_URL", "")).strip()
+    supabase_anon_key = str(st.secrets.get("SUPABASE_ANON_KEY", "")).strip()
     replacements = {
         'const WIN_AUDIO_FILE = "win-entry.mp3";': f'const WIN_AUDIO_FILE = "{audio_data_uri}";',
         'const LOSE_AUDIO_FILE = "lose-entry.mp3";': f'const LOSE_AUDIO_FILE = "{lose_audio_data_uri}";',
         'const BACKGROUND_AUDIO_FILE = "musique-fond.mp3";': f'const BACKGROUND_AUDIO_FILE = "{bg_audio_data_uri}";',
         'const LEVER_AUDIO_FILE = "son-machine.mp3";': f'const LEVER_AUDIO_FILE = "{lever_audio_data_uri}";',
+        'const SUPABASE_URL = "__SUPABASE_URL__";': f'const SUPABASE_URL = "{supabase_url}";',
+        'const SUPABASE_ANON_KEY = "__SUPABASE_ANON_KEY__";': f'const SUPABASE_ANON_KEY = "{supabase_anon_key}";',
     }
     for source, target in replacements.items():
         if source not in script_js:
