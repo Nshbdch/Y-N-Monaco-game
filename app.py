@@ -89,13 +89,15 @@ def main() -> None:
             width: 100% !important;
             height: 100dvh !important;
             max-height: 100dvh !important;
-            overflow: hidden !important;
+            overflow-y: auto !important;
+            overflow-x: hidden !important;
           }
           section.main {
             padding: 0 !important;
             margin: 0 !important;
             height: 100dvh !important;
-            overflow: hidden !important;
+            overflow-y: auto !important;
+            overflow-x: hidden !important;
           }
           .block-container, [data-testid="stMainBlockContainer"] {
             max-width: 100% !important;
@@ -103,12 +105,14 @@ def main() -> None:
             margin: 0 !important;
             width: 100% !important;
             height: 100dvh !important;
-            overflow: hidden !important;
+            overflow-y: auto !important;
+            overflow-x: hidden !important;
           }
           div[data-testid="stVerticalBlock"] {
             gap: 0 !important;
             height: 100dvh !important;
-            overflow: hidden !important;
+            overflow-y: auto !important;
+            overflow-x: hidden !important;
           }
           div[data-testid="stIFrame"] {
             line-height: 0 !important;
@@ -116,7 +120,8 @@ def main() -> None:
             height: 100dvh !important;
             min-height: 100dvh !important;
             max-height: 100dvh !important;
-            overflow: hidden !important;
+            overflow-y: auto !important;
+            overflow-x: hidden !important;
           }
           iframe[title="st.iframe"] {
             display: block !important;
@@ -142,7 +147,7 @@ def main() -> None:
     )
 
     game_html = build_embedded_html()
-    components.html(game_html, height=IFRAME_HEIGHT, scrolling=False)
+    components.html(game_html, height=IFRAME_HEIGHT, scrolling=True)
 
 
 if __name__ == "__main__":

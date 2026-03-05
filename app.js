@@ -284,6 +284,11 @@ function hasRemainingCredits(email) {
   return getRemainingCredits(email) > 0;
 }
 
+function hasAlreadyWon(email) {
+  const { result } = getParticipantState(email);
+  return result === "win";
+}
+
 function consumeParticipantCredit(email, isWin, prizeName) {
   const state = getParticipantState(email);
   const nextPlaysUsed = Math.min(MAX_PLAYER_CREDITS, state.playsUsed + 1);
@@ -1188,6 +1193,12 @@ async function spinMachine() {
     return;
   }
 
+  if (hasAlreadyWon(currentParticipantEmail)) {
+    dom.statusBanner.className = "status-banner win";
+    dom.statusBanner.textContent = "Cet email a deja gagne un lot";
+    return;
+  }
+
   if (!hasRemainingCredits(currentParticipantEmail)) {
     dom.statusBanner.className = "status-banner lose";
     dom.statusBanner.textContent = "Vous n'avez plus de credit";
@@ -1297,6 +1308,11 @@ function setupEvents() {
     }
 
     const remainingCredits = getRemainingCredits(email);
+    if (hasAlreadyWon(email)) {
+      dom.participantLoginError.textContent = "Cet email a deja gagne un lot et ne peut plus rejouer.";
+      return;
+    }
+
     if (remainingCredits <= 0) {
       dom.participantLoginError.textContent = "Cet email n'a plus de credit.";
       return;
