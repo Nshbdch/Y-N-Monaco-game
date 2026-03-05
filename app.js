@@ -21,6 +21,7 @@ const USE_SUPABASE =
   Boolean(SUPABASE_ANON_KEY) &&
   !SUPABASE_URL.includes("__SUPABASE_URL__") &&
   !SUPABASE_ANON_KEY.includes("__SUPABASE_ANON_KEY__");
+let supabaseEnabled = USE_SUPABASE;
 const FALLBACK_SYMBOLS = [
   { name: "ALIEN", icon: "👽" },
   { name: "ASTRO", icon: "👨‍🚀" },
@@ -123,6 +124,9 @@ function supabaseHeaders(extra = {}) {
 }
 
 async function supabaseFetch(path, options = {}) {
+  if (!supabaseEnabled) {
+    throw new Error("Supabase disabled");
+  }
   const response = await fetch(`${SUPABASE_URL}${path}`, {
     ...options,
     headers: {
@@ -131,6 +135,9 @@ async function supabaseFetch(path, options = {}) {
     },
   });
   if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      supabaseEnabled = false;
+    }
     throw new Error(`Supabase ${response.status} on ${path}`);
   }
   if (response.status === 204) {
@@ -190,70 +197,90 @@ async function loadParticipantsFromSupabase() {
 }
 
 async function upsertPrizeToSupabase(prize) {
-  if (!USE_SUPABASE) return;
-  await supabaseFetch("/rest/v1/prizes", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Prefer: "resolution=merge-duplicates",
-    },
-    body: JSON.stringify([
-      {
-        name: normalizePrizeName(prize.name),
-        rate: Number(prize.rate),
-        quantity: Math.max(0, Math.floor(Number(prize.quantity))),
+  if (!supabaseEnabled) return;
+  try {
+    await supabaseFetch("/rest/v1/prizes", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Prefer: "resolution=merge-duplicates",
       },
-    ]),
-  });
+      body: JSON.stringify([
+        {
+          name: normalizePrizeName(prize.name),
+          rate: Number(prize.rate),
+          quantity: Math.max(0, Math.floor(Number(prize.quantity))),
+        },
+      ]),
+    });
+  } catch (error) {
+    console.error("upsertPrizeToSupabase failed:", error);
+  }
 }
 
 async function deletePrizeFromSupabase(name) {
-  if (!USE_SUPABASE) return;
-  await supabaseFetch(`/rest/v1/prizes?name=eq.${encodeURIComponent(name)}`, {
-    method: "DELETE",
-  });
+  if (!supabaseEnabled) return;
+  try {
+    await supabaseFetch(`/rest/v1/prizes?name=eq.${encodeURIComponent(name)}`, {
+      method: "DELETE",
+    });
+  } catch (error) {
+    console.error("deletePrizeFromSupabase failed:", error);
+  }
 }
 
 async function upsertParticipantToSupabase(participant) {
-  if (!USE_SUPABASE) return;
-  await supabaseFetch("/rest/v1/participants", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Prefer: "resolution=merge-duplicates",
-    },
-    body: JSON.stringify([
-      {
-        email: normalizeEmail(participant.email),
-        plays_used: Math.max(0, Math.floor(Number(participant.playsUsed || 0))),
-        played_at: participant.playedAt || null,
-        result: participant.result || null,
-        prize: participant.prize || null,
+  if (!supabaseEnabled) return;
+  try {
+    await supabaseFetch("/rest/v1/participants", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Prefer: "resolution=merge-duplicates",
       },
-    ]),
-  });
+      body: JSON.stringify([
+        {
+          email: normalizeEmail(participant.email),
+          plays_used: Math.max(0, Math.floor(Number(participant.playsUsed || 0))),
+          played_at: participant.playedAt || null,
+          result: participant.result || null,
+          prize: participant.prize || null,
+        },
+      ]),
+    });
+  } catch (error) {
+    console.error("upsertParticipantToSupabase failed:", error);
+  }
 }
 
 async function insertWinnerToSupabase(entry) {
-  if (!USE_SUPABASE) return;
-  await supabaseFetch("/rest/v1/winners", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify([
-      {
-        email: normalizeEmail(entry.email),
-        prize: normalizePrizeName(entry.prize),
-        at: entry.at,
-      },
-    ]),
-  });
+  if (!supabaseEnabled) return;
+  try {
+    await supabaseFetch("/rest/v1/winners", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify([
+        {
+          email: normalizeEmail(entry.email),
+          prize: normalizePrizeName(entry.prize),
+          at: entry.at,
+        },
+      ]),
+    });
+  } catch (error) {
+    console.error("insertWinnerToSupabase failed:", error);
+  }
 }
 
 async function clearWinnersFromSupabase() {
-  if (!USE_SUPABASE) return;
-  await supabaseFetch("/rest/v1/winners?id=gt.0", {
-    method: "DELETE",
-  });
+  if (!supabaseEnabled) return;
+  try {
+    await supabaseFetch("/rest/v1/winners?id=gt.0", {
+      method: "DELETE",
+    });
+  } catch (error) {
+    console.error("clearWinnersFromSupabase failed:", error);
+  }
 }
 
 function loadPrizes() {
@@ -333,7 +360,7 @@ async function registerWinner(email, prizeName) {
   };
   winnerLog.push(entry);
   saveWinners();
-  if (USE_SUPABASE) {
+  if (supabaseEnabled) {
     await insertWinnerToSupabase(entry);
   }
 }
@@ -341,7 +368,7 @@ async function registerWinner(email, prizeName) {
 async function clearWinners() {
   winnerLog = [];
   saveWinners();
-  if (USE_SUPABASE) {
+  if (supabaseEnabled) {
     await clearWinnersFromSupabase();
   }
 }
@@ -386,7 +413,7 @@ async function clearWinnersAndRestoreStock() {
   });
 
   savePrizes();
-  if (USE_SUPABASE) {
+  if (supabaseEnabled) {
     await Promise.all(prizePool.map((prize) => upsertPrizeToSupabase(prize)));
   }
   await clearWinners();
@@ -459,7 +486,7 @@ async function consumeParticipantCredit(email, isWin, prizeName) {
     prize: isWin ? prizeName : null,
   };
   saveParticipants();
-  if (USE_SUPABASE) {
+  if (supabaseEnabled) {
     await upsertParticipantToSupabase(participantRegistry[email]);
   }
   return Math.max(0, MAX_PLAYER_CREDITS - nextPlaysUsed);
@@ -470,7 +497,7 @@ function savePrizes() {
 }
 
 async function seedAdminPrizesIfNeeded() {
-  if (USE_SUPABASE) {
+  if (supabaseEnabled) {
     try {
       const remotePrizes = await loadPrizesFromSupabase();
       if (remotePrizes.length > 0) {
@@ -631,7 +658,7 @@ async function consumePrizeStock(prizeName) {
   }
   prize.quantity -= 1;
   savePrizes();
-  if (USE_SUPABASE) {
+  if (supabaseEnabled) {
     await upsertPrizeToSupabase(prize);
   }
   return true;
@@ -1498,7 +1525,7 @@ function setupEvents() {
       return;
     }
 
-    if (USE_SUPABASE) {
+    if (supabaseEnabled) {
       try {
         const rows = await supabaseFetch(
           `/rest/v1/participants?select=email,plays_used,played_at,result,prize&email=eq.${encodeURIComponent(email)}`,
@@ -1547,7 +1574,7 @@ function setupEvents() {
     if (dom.adminPassword.value === ADMIN_PASSWORD) {
       dom.adminLoginError.textContent = "";
       dom.adminPassword.value = "";
-      if (USE_SUPABASE) {
+      if (supabaseEnabled) {
         try {
           prizePool = await loadPrizesFromSupabase();
           participantRegistry = await loadParticipantsFromSupabase();
@@ -1594,7 +1621,7 @@ function setupEvents() {
     }
 
     savePrizes();
-    if (USE_SUPABASE) {
+    if (supabaseEnabled) {
       await upsertPrizeToSupabase({ name, rate, quantity });
       if (editingPrizeName && editingPrizeName !== name) {
         await deletePrizeFromSupabase(editingPrizeName);
@@ -1630,7 +1657,7 @@ function setupEvents() {
       resetPrizeFormEditState();
     }
     savePrizes();
-    if (USE_SUPABASE) {
+    if (supabaseEnabled) {
       await deletePrizeFromSupabase(deleteName);
     }
     renderPrizes();
