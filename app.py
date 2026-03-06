@@ -55,20 +55,54 @@ def build_embedded_html() -> str:
     style_css = style_css.replace('url("meteorite.avif")', f'url("{meteor_data_uri}")')
     supabase_url = str(st.secrets.get("SUPABASE_URL", "")).strip()
     supabase_anon_key = str(st.secrets.get("SUPABASE_ANON_KEY", "")).strip()
-    replacements = {
-        'const WIN_AUDIO_FILE = "win-entry.mp3";': f'const WIN_AUDIO_FILE = "{audio_data_uri}";',
-        'const LOSE_AUDIO_FILE = "lose-entry.mp3";': f'const LOSE_AUDIO_FILE = "{lose_audio_data_uri}";',
-        'const BACKGROUND_AUDIO_FILE = "musique-fond.mp3";': f'const BACKGROUND_AUDIO_FILE = "{bg_audio_data_uri}";',
-        'const LEVER_AUDIO_FILE = "son-machine.mp3";': f'const LEVER_AUDIO_FILE = "{lever_audio_data_uri}";',
-        'const TERMINAL_WIN_IMAGE = "win-chris-clem.png";': f'const TERMINAL_WIN_IMAGE = "{win_screen_data_uri}";',
-        'const TERMINAL_NO_CREDITS_IMAGE = "loose-chris-clem.png";': f'const TERMINAL_NO_CREDITS_IMAGE = "{no_credits_data_uri}";',
-        'const SUPABASE_URL = "__SUPABASE_URL__";': f'const SUPABASE_URL = "{supabase_url}";',
-        'const SUPABASE_ANON_KEY = "__SUPABASE_ANON_KEY__";': f'const SUPABASE_ANON_KEY = "{supabase_anon_key}";',
-    }
-    for source, target in replacements.items():
-        if source not in script_js:
-            raise ValueError(f"Constante audio introuvable dans app.js: {source}")
-        script_js = script_js.replace(source, target)
+    script_js = re.sub(
+        r'const WIN_AUDIO_FILE = ".*?";',
+        f'const WIN_AUDIO_FILE = "{audio_data_uri}";',
+        script_js,
+        count=1,
+    )
+    script_js = re.sub(
+        r'const LOSE_AUDIO_FILE = ".*?";',
+        f'const LOSE_AUDIO_FILE = "{lose_audio_data_uri}";',
+        script_js,
+        count=1,
+    )
+    script_js = re.sub(
+        r'const BACKGROUND_AUDIO_FILE = ".*?";',
+        f'const BACKGROUND_AUDIO_FILE = "{bg_audio_data_uri}";',
+        script_js,
+        count=1,
+    )
+    script_js = re.sub(
+        r'const LEVER_AUDIO_FILE = ".*?";',
+        f'const LEVER_AUDIO_FILE = "{lever_audio_data_uri}";',
+        script_js,
+        count=1,
+    )
+    script_js = re.sub(
+        r'const TERMINAL_WIN_IMAGE = ".*?";',
+        f'const TERMINAL_WIN_IMAGE = "{win_screen_data_uri}";',
+        script_js,
+        count=1,
+    )
+    script_js = re.sub(
+        r'const TERMINAL_NO_CREDITS_IMAGE = ".*?";',
+        f'const TERMINAL_NO_CREDITS_IMAGE = "{no_credits_data_uri}";',
+        script_js,
+        count=1,
+    )
+    script_js = re.sub(
+        r'const SUPABASE_URL = ".*?";',
+        f'const SUPABASE_URL = "{supabase_url}";',
+        script_js,
+        count=1,
+    )
+    script_js = re.sub(
+        r'const SUPABASE_ANON_KEY = ".*?";',
+        f'const SUPABASE_ANON_KEY = "{supabase_anon_key}";',
+        script_js,
+        count=1,
+    )
 
     body_inner = extract_body(index_html)
     body_inner = re.sub(r"<script\s+src=\"app\.js\"></script>", "", body_inner, flags=re.IGNORECASE)
