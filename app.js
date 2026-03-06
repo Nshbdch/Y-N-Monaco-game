@@ -16,6 +16,10 @@ const BACKGROUND_AUDIO_FILE = "musique-fond.mp3";
 const LEVER_AUDIO_FILE = "son-machine.mp3";
 const SUPABASE_URL = "__SUPABASE_URL__";
 const SUPABASE_ANON_KEY = "__SUPABASE_ANON_KEY__";
+const TERMINAL_WIN_IMAGE = "win-chris-clem.png";
+const TERMINAL_NO_CREDITS_IMAGE = "loose-chris-clem.png";
+const NO_CREDITS_OVERLAY_DURATION_MS = 5000;
+const NO_CREDITS_MESSAGE = "VOUS N'AVEZ PLUS DE CREDITS";
 const USE_SUPABASE =
   Boolean(SUPABASE_URL) &&
   Boolean(SUPABASE_ANON_KEY) &&
@@ -79,6 +83,7 @@ const dom = {
   confettiLayer: document.getElementById("confettiLayer"),
   alarmFlash: document.getElementById("alarmFlash"),
   terminalBody: document.getElementById("terminalBody"),
+  terminalWinImage: document.getElementById("terminalWinImage"),
   terminalPrizeShowcase: document.getElementById("terminalPrizeShowcase"),
   terminalBackToHome: document.getElementById("terminalBackToHome"),
   quickAdminBtn: document.getElementById("quickAdminBtn"),
@@ -100,6 +105,8 @@ let backgroundAudioStarted = false;
 let backgroundSuspendCount = 0;
 let shouldResumeBackgroundAfterSuspend = false;
 let loseAudioResumeTimer;
+let loseOverlayHideTimer;
+let noCreditsTransitionTimer;
 let actionSfxPrimed = false;
 let meteorTimer;
 let lastGameScreenRect = null;
@@ -143,7 +150,20 @@ async function supabaseFetch(path, options = {}) {
   if (response.status === 204) {
     return null;
   }
-  return response.json();
+  const contentLength = response.headers.get("content-length");
+  const contentType = response.headers.get("content-type") || "";
+  if (contentLength === "0") {
+    return null;
+  }
+  if (!contentType.includes("application/json")) {
+    const raw = await response.text();
+    return raw ? raw : null;
+  }
+  const raw = await response.text();
+  if (!raw) {
+    return null;
+  }
+  return JSON.parse(raw);
 }
 
 async function loadPrizesFromSupabase() {
@@ -1224,6 +1244,17 @@ function resetParticipantSession() {
     dom.terminalPrizeShowcase.classList.add("hidden");
     dom.terminalPrizeShowcase.innerHTML = "";
   }
+  if (dom.terminalWinImage) {
+    dom.terminalWinImage.classList.add("hidden");
+  }
+  if (dom.terminalBody) {
+    dom.terminalBody.classList.remove("hidden");
+    dom.terminalBody.textContent = "";
+  }
+  const terminalShell = dom.terminalBody?.closest(".terminal-shell");
+  if (terminalShell) {
+    terminalShell.classList.remove("win-image-mode");
+  }
 }
 
 function isAdminAccessUrl() {
@@ -1261,20 +1292,44 @@ function openAdminLogin() {
 
 function prepareWinTerminal(prizeName) {
   const icon = getIconForLabel(prizeName);
-  const lines = [
-    "> BOOT SEQUENCE ... OK",
-    "> TERMINAL LINK ... STABLE",
-    `> SIGNAL: BRAVO COMMANDER ${currentParticipantEmail.toUpperCase()}`,
-    `> >>> LOT GAGNE: ${icon} ${prizeName} <<<`,
-    "> TRANSMISSION ENVOYEE AU COMMANDANT",
-    "> STATUT: EN ATTENTE DE CONFIRMATION",
-    "> VOUS RECEVREZ BIENTOT LES DETAILS DE VOTRE GAIN",
-  ];
-  dom.terminalBody.textContent = lines.join("\n");
+  if (dom.terminalBody) {
+    dom.terminalBody.textContent = "";
+    dom.terminalBody.classList.add("hidden");
+  }
+  if (dom.terminalWinImage) {
+    dom.terminalWinImage.src = TERMINAL_WIN_IMAGE;
+    dom.terminalWinImage.classList.remove("hidden");
+  }
+  const terminalShell = dom.terminalBody?.closest(".terminal-shell");
+  if (terminalShell) {
+    terminalShell.classList.add("win-image-mode");
+  }
   if (dom.terminalPrizeShowcase) {
     dom.terminalPrizeShowcase.innerHTML = `
       <span class="terminal-prize-label">Lot obtenu</span>
       <span class="terminal-prize-value">${icon} ${prizeName}</span>
+    `;
+    dom.terminalPrizeShowcase.classList.remove("hidden");
+  }
+}
+
+function prepareNoCreditsTerminal() {
+  if (dom.terminalBody) {
+    dom.terminalBody.textContent = "";
+    dom.terminalBody.classList.add("hidden");
+  }
+  if (dom.terminalWinImage) {
+    dom.terminalWinImage.src = TERMINAL_NO_CREDITS_IMAGE;
+    dom.terminalWinImage.classList.remove("hidden");
+  }
+  const terminalShell = dom.terminalBody?.closest(".terminal-shell");
+  if (terminalShell) {
+    terminalShell.classList.add("win-image-mode");
+  }
+  if (dom.terminalPrizeShowcase) {
+    dom.terminalPrizeShowcase.innerHTML = `
+      <span class="terminal-prize-label">Statut</span>
+      <span class="terminal-prize-value">VOUS N'AVEZ PLUS DE CREDITS</span>
     `;
     dom.terminalPrizeShowcase.classList.remove("hidden");
   }
@@ -1356,14 +1411,34 @@ function triggerLoseAlarm() {
   showResultOverlay("PERDU", "lose");
   dom.alarmFlash.classList.add("active");
   setTimeout(() => dom.alarmFlash.classList.remove("active"), 360);
-  setTimeout(hideResultOverlay, 5200);
+  if (loseOverlayHideTimer) {
+    clearTimeout(loseOverlayHideTimer);
+  }
+  loseOverlayHideTimer = setTimeout(() => {
+    hideResultOverlay();
+    loseOverlayHideTimer = undefined;
+  }, 5200);
 }
 
 function triggerNoCreditsAlarm() {
   playLoseAudio();
-  showResultOverlay("VOUS N'AVEZ PLUS DE CREDIT", "lose");
+  if (loseOverlayHideTimer) {
+    clearTimeout(loseOverlayHideTimer);
+    loseOverlayHideTimer = undefined;
+  }
+  if (noCreditsTransitionTimer) {
+    clearTimeout(noCreditsTransitionTimer);
+    noCreditsTransitionTimer = undefined;
+  }
+  showResultOverlay(NO_CREDITS_MESSAGE, "lose");
   dom.alarmFlash.classList.add("active");
   setTimeout(() => dom.alarmFlash.classList.remove("active"), 360);
+  noCreditsTransitionTimer = setTimeout(() => {
+    hideResultOverlay();
+    prepareNoCreditsTerminal();
+    transitionToTerminalScreen();
+    noCreditsTransitionTimer = undefined;
+  }, NO_CREDITS_OVERLAY_DURATION_MS);
 }
 
 function weightedWin(prizes) {
@@ -1477,9 +1552,6 @@ async function spinMachine() {
   renderLivesHearts(remainingCredits);
 
   if (resolvedWin) {
-    await registerWinner(currentParticipantEmail, outcome[0]);
-    renderPrizes();
-    renderWinners();
     reels.forEach((reel) => reel.classList.add("win-hit"));
     dom.statusBanner.textContent = `GAGNÉ - ${outcome[0]}`;
     dom.statusBanner.className = "status-banner win";
@@ -1487,6 +1559,14 @@ async function spinMachine() {
     await sleep(WIN_REVEAL_PAUSE_MS);
     dom.slotMachine.classList.add("win-burst");
     triggerWinCelebration(outcome[0]);
+    // Persistence/sync must never block or cancel the win celebration UI.
+    try {
+      await registerWinner(currentParticipantEmail, outcome[0]);
+      renderPrizes();
+      renderWinners();
+    } catch (error) {
+      console.error("Winner persistence failed after win animation:", error);
+    }
   } else {
     if (isWin && !stockAvailable) {
       dom.statusBanner.textContent = "PERDU - Lot indisponible";

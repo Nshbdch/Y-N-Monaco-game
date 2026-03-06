@@ -16,6 +16,8 @@ LOSE_AUDIO_FILE = ROOT / "lose-entry.mp3"
 BACKGROUND_AUDIO_FILE = ROOT / "musique-fond.mp3"
 LEVER_AUDIO_FILE = ROOT / "son-machine.mp3"
 METEOR_FILE = ROOT / "meteorite.avif"
+WIN_SCREEN_FILE = ROOT / "win-chris-clem.png"
+NO_CREDITS_SCREEN_FILE = ROOT / "loose-chris-clem.png"
 IFRAME_HEIGHT = 1200
 
 
@@ -41,6 +43,11 @@ def build_embedded_html() -> str:
     lever_audio_data_uri = f"data:audio/mpeg;base64,{lever_audio_b64}"
     meteor_b64 = base64.b64encode(METEOR_FILE.read_bytes()).decode("ascii")
     meteor_data_uri = f"data:image/avif;base64,{meteor_b64}"
+    win_screen_b64 = base64.b64encode(WIN_SCREEN_FILE.read_bytes()).decode("ascii")
+    win_screen_data_uri = f"data:image/png;base64,{win_screen_b64}"
+    no_credits_b64 = base64.b64encode(NO_CREDITS_SCREEN_FILE.read_bytes()).decode("ascii")
+    no_credits_data_uri = f"data:image/png;base64,{no_credits_b64}"
+    index_html = index_html.replace('src="win-chris-clem.png"', f'src="{win_screen_data_uri}"')
     style_css = style_css.replace('url("meteorite.avif")', f'url("{meteor_data_uri}")')
     supabase_url = str(st.secrets.get("SUPABASE_URL", "")).strip()
     supabase_anon_key = str(st.secrets.get("SUPABASE_ANON_KEY", "")).strip()
@@ -49,6 +56,8 @@ def build_embedded_html() -> str:
         'const LOSE_AUDIO_FILE = "lose-entry.mp3";': f'const LOSE_AUDIO_FILE = "{lose_audio_data_uri}";',
         'const BACKGROUND_AUDIO_FILE = "musique-fond.mp3";': f'const BACKGROUND_AUDIO_FILE = "{bg_audio_data_uri}";',
         'const LEVER_AUDIO_FILE = "son-machine.mp3";': f'const LEVER_AUDIO_FILE = "{lever_audio_data_uri}";',
+        'const TERMINAL_WIN_IMAGE = "win-chris-clem.png";': f'const TERMINAL_WIN_IMAGE = "{win_screen_data_uri}";',
+        'const TERMINAL_NO_CREDITS_IMAGE = "loose-chris-clem.png";': f'const TERMINAL_NO_CREDITS_IMAGE = "{no_credits_data_uri}";',
         'const SUPABASE_URL = "__SUPABASE_URL__";': f'const SUPABASE_URL = "{supabase_url}";',
         'const SUPABASE_ANON_KEY = "__SUPABASE_ANON_KEY__";': f'const SUPABASE_ANON_KEY = "{supabase_anon_key}";',
     }
