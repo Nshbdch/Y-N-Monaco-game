@@ -47,7 +47,11 @@ def build_embedded_html() -> str:
     win_screen_data_uri = f"data:image/png;base64,{win_screen_b64}"
     no_credits_b64 = base64.b64encode(NO_CREDITS_SCREEN_FILE.read_bytes()).decode("ascii")
     no_credits_data_uri = f"data:image/png;base64,{no_credits_b64}"
-    index_html = index_html.replace('src="win-chris-clem.png"', f'src="{win_screen_data_uri}"')
+    # Replace image file references with data URIs for Streamlit srcdoc compatibility.
+    index_html = index_html.replace("win-chris-clem.png", win_screen_data_uri)
+    index_html = index_html.replace("loose-chris-clem.png", no_credits_data_uri)
+    script_js = script_js.replace("win-chris-clem.png", win_screen_data_uri)
+    script_js = script_js.replace("loose-chris-clem.png", no_credits_data_uri)
     style_css = style_css.replace('url("meteorite.avif")', f'url("{meteor_data_uri}")')
     supabase_url = str(st.secrets.get("SUPABASE_URL", "")).strip()
     supabase_anon_key = str(st.secrets.get("SUPABASE_ANON_KEY", "")).strip()
